@@ -33,9 +33,7 @@ int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr)
   sdr->coarse_freq_shift = 0;
   
   /* write input data into fifo */
-  for (i=0;i<sdr->input_buffer_len;i++) {
-    cbWrite(&(sdr->fifo),&sdr->input_buffer[i]);
-  }
+  cbWriteBytes(&sdr->fifo, sdr->input_buffer, sdr->input_buffer_len);
 
   /* Check for data in fifo */
   if (sdr->fifo.count < 196608*3) {
