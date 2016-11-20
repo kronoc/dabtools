@@ -322,7 +322,7 @@ void dump_ens_info(struct ens_info_t* info)
   for (i=0;i<64;i++) {
     struct subchannel_info_t *sc = &info->subchans[i];
     if (sc->id >= 0) {
-      fprintf(stderr,"SubChId=%d, slForm=%d, StartAddress=%d, size=%d, bitrate=%d, ASCTy=0x%02x\n",sc->id,sc->slForm,sc->start_cu,sc->size,sc->bitrate,sc->ASCTy);
+      fprintf(stderr,"SubChId=%2d, slForm=%d, StartAddress=%3d, size=%3d, bitrate=%3d, ASCTy=0x%02x\n",sc->id,sc->slForm,sc->start_cu,sc->size,sc->bitrate,sc->ASCTy);
     }
   }
 }
