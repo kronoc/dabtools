@@ -9,7 +9,7 @@
 
 void usage(void)
 {
-  fprintf(stderr,"Usage: etiplayer N\n");
+  fprintf(stderr,"Usage: eti2mpa N\n");
   fprintf(stderr,"          N = sub-channel ID to output to stdout\n");
 }
 
@@ -17,7 +17,7 @@ int main(int argc, char* argv[])
 {
   uint8_t buf[6144];  /* Main buffer for an ETI frame */
   int subchanid;
-  int i,n;
+  int i,n,n_frame;
 
   if (argc != 2) {
     usage();
@@ -30,10 +30,16 @@ int main(int argc, char* argv[])
 
   fprintf(stderr,"Decoding channel %d\n",subchanid);
   while (1) {
-    n = read(0,buf,6144);
-    if (n != 6144) {
-      fprintf(stderr,"Read error, exiting\n");
-      return 1;
+    for (n_frame = 0; n_frame < 6144; n_frame += n) {
+      n = read(0,buf + n_frame,6144 - n_frame);
+      if (n == 0) {
+        fprintf(stderr,"End of file, exiting\n");
+        return 0;
+      }
+      if (n < 0) {
+        perror("Read error, exiting");
+        return 1;
+      }
     }
 
     /* TODO: Check Sync etc */

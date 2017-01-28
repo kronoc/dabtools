@@ -22,6 +22,7 @@ david.may.muc@googlemail.com
 #include <stdio.h>
 #include <stdint.h>
 #include <malloc.h>
+#include <string.h>
 
 
 typedef struct 
@@ -38,6 +39,8 @@ void cbFree(CircularBuffer *cb);
 int cbIsFull(CircularBuffer *cb);
 int cbIsEmpty(CircularBuffer *cb);
 void cbWrite(CircularBuffer *cb, uint8_t *elem);
+void cbWriteBytes(CircularBuffer *cb, uint8_t *elems, size_t len);
 void cbRead(CircularBuffer *cb, uint8_t *elem);
+void cbReadBytes(CircularBuffer *cb, uint8_t *elems, size_t len);
 
 int32_t sdr_read_fifo(CircularBuffer * fifo,uint32_t bytes,int32_t shift,uint8_t * buffer);
