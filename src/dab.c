@@ -43,9 +43,9 @@ void dab_process_frame(struct dab_state_t *dab)
     //dump_tf_info(&dab->tf_info);
   }
 
-  if (dab->tfs[dab->tfidx].fibs.ok_count == 12) {
+  if (dab->tfs[dab->tfidx].fibs.ok_count >= FIB_CRC_LOCK_VALUE_TRESHOLD) {
     dab->okcount++;
-    if ((dab->okcount >= 10) && (!dab->locked)) { // 10 successive 100% perfect sets of FICs, we are locked.
+    if ((dab->okcount >= FIB_CRC_LOCK_COUNT_TRESHOLD) && (!dab->locked)) { // certain amount of successive relatively perfect sets of FICs, we are locked.
       dab->locked = 1;
       //fprintf(stderr,"Locked with center-frequency %dHz\n",sdr->frequency);
       fprintf(stderr,"Locked\n");
@@ -62,6 +62,10 @@ void dab_process_frame(struct dab_state_t *dab)
   }
 
   if (dab->locked) {
+    int wrong_fibs = 12 - dab->tfs[dab->tfidx].fibs.ok_count;
+    if (wrong_fibs > 0)
+      fprintf(stderr, "Received %d FIBs with CRC mismatch\n", wrong_fibs);
+
     merge_info(&dab->ens_info,&dab->tf_info);  /* Only merge the info once we are locked */
     if (dab->ncifs < 16) {
       /* Initial buffer fill */
