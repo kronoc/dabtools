@@ -24,6 +24,10 @@ struct tf_fibs_t {
   uint8_t FIB_CRC_OK[12]; /* 1 = CRC OK, 0 = CRC Error */ 
 };
 
+// treshold values for the FIB CRC check to detect signal lock
+#define FIB_CRC_LOCK_VALUE_TRESHOLD 9
+#define FIB_CRC_LOCK_COUNT_TRESHOLD 10
+
 struct demapped_transmission_frame_t {
   uint8_t has_fic;        /* Is there any FIC information at all? (The Wavefinder drops the FIC symbols in every 5th transmission frame )*/
   uint8_t fic_symbols_demapped[3][3072];
