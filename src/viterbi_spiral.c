@@ -1,5 +1,5 @@
 /* Generic Viterbi decoder,
- * Copyright Phil Karn, KA9Q, 
+ * Copyright Phil Karn, KA9Q,
  * Code has been slightly modified for use with Spiral (www.spiral.net)
  * Karn's original code can be found here: http://www.ka9q.net/code/fec/
  * May be used under the terms of the GNU Lesser General Public License (LGPL)
@@ -121,7 +121,7 @@ typedef union {
   COMPUTETYPE t[NUMSTATES];
 } metric_t __attribute__ ((aligned (16)));
 
-inline void renormalize(COMPUTETYPE* X, COMPUTETYPE threshold){
+static inline void renormalize(COMPUTETYPE* X, COMPUTETYPE threshold){
       if (X[0]>threshold){
     COMPUTETYPE min=X[0];
     for(int i=0;i<NUMSTATES;i++)
@@ -252,21 +252,21 @@ void BFLY(int i, int s, COMPUTETYPE * syms, struct v * vp, decision_t * d) {
   metric =0;
   for (j=0;j<RATE;j++) metric += (Branchtab[i+j*NUMSTATES/2] ^ syms[s*RATE+j])>>METRICSHIFT ;
   metric=metric>>PRECISIONSHIFT;
-  
+
   const COMPUTETYPE max = ((RATE*((256 -1)>>METRICSHIFT))>>PRECISIONSHIFT);
-  
+
   m0 = vp->old_metrics->t[i] + metric;
   m1 = vp->old_metrics->t[i+NUMSTATES/2] + (max - metric);
   m2 = vp->old_metrics->t[i] + (max - metric);
   m3 = vp->old_metrics->t[i+NUMSTATES/2] + metric;
-  
+
   decision0 = (signed int)(m0-m1) > 0;
   decision1 = (signed int)(m2-m3) > 0;
-  
+
   vp->new_metrics->t[2*i] = decision0 ? m1 : m0;
   vp->new_metrics->t[2*i+1] =  decision1 ? m3 : m2;
-  
-  d->w[i/(sizeof(unsigned int)*8/2)+s*(sizeof(decision_t)/sizeof(unsigned int))] |= 
+
+  d->w[i/(sizeof(unsigned int)*8/2)+s*(sizeof(decision_t)/sizeof(unsigned int))] |=
     (decision0|decision1<<1) << ((2*i)&(sizeof(unsigned int)*8-1));
 }
 
@@ -298,10 +298,10 @@ int update_viterbi_blk_GENERIC(void *p, COMPUTETYPE *syms,int nbits){
 #ifdef GENERICONLY
     COMPUTETYPE min=vp->new_metrics->t[0];
     COMPUTETYPE max=vp->new_metrics->t[0];
-    
+
     /* Compute Spread */
     for(int i=0;i<NUMSTATES;i++)
-      if (min>vp->new_metrics->t[i]) 
+      if (min>vp->new_metrics->t[i])
         min=vp->new_metrics->t[i];
       else if (max<vp->new_metrics->t[i])
         max=vp->new_metrics->t[i];
@@ -310,7 +310,7 @@ int update_viterbi_blk_GENERIC(void *p, COMPUTETYPE *syms,int nbits){
 #endif
 
     renormalize(vp->new_metrics->t, RENORMALIZE_THRESHOLD);
-    
+
     ///     Swap pointers to old and new metrics
     tmp = vp->old_metrics;
     vp->old_metrics = vp->new_metrics;
@@ -348,7 +348,7 @@ void viterbi(void *p,COMPUTETYPE *symbols, unsigned char *data, int framebits)
 
   /* Initialize Viterbi decoder */
   init_viterbi(vp,0);
-    
+
   /* Decode block */
   update_viterbi_blk_SPIRAL(vp,symbols,framebits+(K-1));
 
