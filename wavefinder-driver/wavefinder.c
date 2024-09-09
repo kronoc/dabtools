@@ -476,7 +476,7 @@ static int wf_sendmem(pwavefinder_t s, int value, int index, unsigned char *byte
 */
 static int wf_mem_write(pwavefinder_t s, unsigned short addr, unsigned short val)
 {
-	unsigned char bytes[4];
+	unsigned char *bytes = kzalloc(4, GFP_KERNEL);
 
 	bytes[0] = (unsigned char)(addr & 0xff);
 	bytes[1] = (unsigned char)((addr >> 8) & 0xff);
@@ -494,9 +494,8 @@ static int wf_mem_write(pwavefinder_t s, unsigned short addr, unsigned short val
 static int wf_tune_msg(pwavefinder_t s, unsigned int reg, unsigned char bits, unsigned char pll, int lband)
 {
 #define TBUFSIZE 12
-	unsigned char tbuf[TBUFSIZE];
+	unsigned char *tbuf = kzalloc(TBUFSIZE, GFP_KERNEL);
 
-	memset(tbuf, 0, TBUFSIZE);  /* zero buffer */
 	tbuf[0] = reg & 0xff;
 	tbuf[1] = (reg >> 8) & 0xff;
 	tbuf[2] = (reg >> 16) & 0xff;
@@ -570,8 +569,8 @@ static int wf_boot_dsps(pwavefinder_t s)
 	unsigned short addrreg[2] = {HPIA_B, HPIA_A};
 	unsigned short datareg[2] = {HPID_B, HPID_A};
 	unsigned short entry_pt[2];
-	unsigned short rbuf[3];
-	unsigned char ubuf[USBDATALEN*2];
+	unsigned short *rbuf = kzalloc(3, GFP_KERNEL);
+	unsigned char *ubuf = kzalloc(USBDATALEN * 2, GFP_KERNEL);
 	const struct firmware *fw = NULL;
 	const unsigned char *cbuf;
 	int i,j,remain, left, frames;
@@ -728,7 +727,8 @@ static int wf_req1req2(pwavefinder_t s, int reqnum, int msgnum)
 			      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 
 	/* unsigned char *p = r0; */
-	unsigned char *p = r2;
+	unsigned char *p = kzalloc(64, GFP_KERNEL);
+	memcpy(p, r2, 64);
 
 	switch (msgnum) {
 	case 0:
@@ -980,26 +980,26 @@ static int wf_timing(pwavefinder_t s, int msgnum)
 			      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x00};
 
-	unsigned char *p;
+	unsigned char *p = kzalloc(32, GFP_KERNEL);
 
 	switch (msgnum) {
 	case 0:
-		p = m0;
+		memcpy(p, m0, 32);
 		break;
 	case 1:
-		p = m1;
+		memcpy(p, m1, 32);
 		break;
 	case 2:
-		p = m2;
+		memcpy(p, m2, 32);
 		break;
 	case 3:
-		p = m3;
+		memcpy(p, m3, 32);
 		break;
 	case 4:
-		p = m4;
+		memcpy(p, m4, 32);
 		break;
 	default:
-		p = m0;
+		memcpy(p, m0, 32);
 		break;
 	}
 
