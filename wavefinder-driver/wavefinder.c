@@ -43,6 +43,7 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
 #include <linux/smp_lock.h>
 #endif
+#include <linux/sched/signal.h>
 
 #include "wavefinder.h"
 #include "wfsl11r.h"
@@ -164,7 +165,7 @@ static int wavefinder_prepare_urb(pwavefinder_t s, struct urb *purb)
 	return 0;
 }
 
-static void wavefinder_iso_complete(struct urb *purb, struct pt_regs *regs)
+static void wavefinder_iso_complete(struct urb *purb)
 {
 	pwavefinder_t s = purb->context;
 	int i,j, subret, pkts = 0;
@@ -249,7 +250,7 @@ static int wavefinder_free_buffers(pwavefinder_t s)
 static int wavefinder_alloc_buffers(pwavefinder_t s)
 {
 	unsigned int pipe = usb_rcvisocpipe(s->usbdev, _WAVEFINDER_ISOPIPE);
-	int pipesize = usb_maxpacket(s->usbdev, pipe, usb_pipeout(pipe));
+	int pipesize = usb_maxpacket(s->usbdev, pipe);
 	int packets;
 	int transfer_buffer_length;
 	int i,j;
@@ -379,7 +380,7 @@ static ssize_t wavefinder_read(struct file *file, char __user *buf, size_t count
 	if (*ppos)
 		return -ESPIPE;
 
-	if (!access_ok(VERIFY_WRITE, buf, count))
+	if (!access_ok(buf, count))
 		return -EFAULT;
 
 	add_wait_queue(&s->wait, &wait);
@@ -1226,8 +1227,8 @@ static int wavefinder_probe(struct usb_interface *intf,
 	s->devnum = intf->minor;
 	s->state = _stopped;
 
-	dbg("wavefinder: probe: vendor id 0x%x, device id 0x%x ifnum:%d intf->minor:%d s=%ud wavefinder_t=%d",
-	    usbdev->descriptor.idVendor, usbdev->descriptor.idProduct, intf->altsetting->desc.bInterfaceNumber,intf->minor,(unsigned int)s,(int)(sizeof(wavefinder_t)));
+	dbg("wavefinder: probe: vendor id 0x%x, device id 0x%x ifnum:%d intf->minor:%d s=%p wavefinder_t=%d",
+	    usbdev->descriptor.idVendor, usbdev->descriptor.idProduct, intf->altsetting->desc.bInterfaceNumber,intf->minor,s,(int)(sizeof(wavefinder_t)));
 
 	if (intf->altsetting->desc.bInterfaceNumber != _WAVEFINDER_IF)
 	        goto reject;
@@ -1262,7 +1263,7 @@ reject:
 
 static void wavefinder_disconnect(struct usb_interface *intf)
 {
-        wait_queue_t __wait;
+        wait_queue_entry_t __wait;
 	pwavefinder_t s = usb_get_intfdata(intf);
 
 	dbg("wavefinder_disconnect");
