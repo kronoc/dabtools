@@ -600,22 +600,22 @@ static int wf_boot_dsps(pwavefinder_t s)
 	rbuf[0] = HPIA_B; /* Load HPI address register */
 	rbuf[1] = 0x00e0;
 	rbuf[2] = 0x0000;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPID_B; /* Load HPI data register */
 	rbuf[1] = 0x0000;
 	rbuf[2] = 0x0000;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);  
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPIC_B; /* Load HPI control register */
 	rbuf[1] = 0x0001;
 	rbuf[2] = 0x0001;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPIC_A; /* Load HPI control register */
 	rbuf[1] = 0x0001;
 	rbuf[2] = 0x0001;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	if (request_firmware(&fw, "wavefinder.fw", &s->usbdev->dev)) {
 		printk("wavefinder:%s: firmware wavefinder.fw not found\n", __func__);
@@ -632,7 +632,7 @@ static int wf_boot_dsps(pwavefinder_t s)
 		rbuf[0] = addrreg[i]; /* Load HPI address register - actually at 0x0080 because of inc. */
 		rbuf[1] = 0x007f;
 		rbuf[2] = 0x0000;
-		wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+		wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 		frames = 0;
 		memset(ubuf, 0, USBDATALEN*2);  /* zero buffer - unnecessary but less confusing to debug */    
@@ -643,13 +643,13 @@ static int wf_boot_dsps(pwavefinder_t s)
 			if (remain >= USBDATALEN) {
 				for (j=2; j < USBDATALEN*2; j+=2)
 					ubuf[j] = *(cbuf + 0x2001 - remain--);
-				wf_sendmem(s, datareg[i], 0, (unsigned char*)&ubuf, USBDATALEN*2);
+				wf_sendmem(s, datareg[i], 0, (unsigned char*)ubuf, USBDATALEN*2);
 				frames++;
 			} else {
 				left = remain*2;
 				for (j=0; j < left; j+=2)
 					ubuf[j+2] = *(cbuf + 0x2000 - remain--);
-				wf_sendmem(s, datareg[i], 0, (unsigned char*)&ubuf, left);
+				wf_sendmem(s, datareg[i], 0, (unsigned char*)ubuf, left);
 				frames++;
 			}
 		}
@@ -665,44 +665,44 @@ static int wf_boot_dsps(pwavefinder_t s)
 	rbuf[0] = HPIA_A; /* Load HPI address register for DSP A */
 	rbuf[1] = 0x007e; /* = 0x007f after increment */
 	rbuf[2] = 0x0000;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPIA_B; /* Load HPI address register for DSP B */
 	rbuf[1] = 0x007e; /* = 0x007f after increment */
 	rbuf[2] = 0x0000;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPID_A; /* Load HPI data register for DSP A */
 	rbuf[1] = entry_pt[1] & 0xff;
 	rbuf[2] = (entry_pt[1] & 0xff00) >> 8;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);  
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPID_B; /* Load HPI data register for DSP B */
 	rbuf[1] = entry_pt[0] & 0xff;;
 	rbuf[2] = (entry_pt[0] & 0xff00) >> 8;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	/* This also gets sent. TODO: why ? */
 	rbuf[0] = HPIA_B; /* Load HPI address register for DSP B */
 	rbuf[1] = 0x00ff;
 	rbuf[2] = 0x003e;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);  
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 	rbuf[0] = HPID_B; /* Load HPI data register for DSP B */
 	rbuf[1] = 0x00;
 	rbuf[2] = 0x00;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 	rbuf[0] = HPID_B; /* Load HPI data register for DSP B */
 	rbuf[1] = 0x00;
 	rbuf[2] = 0x00;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 	rbuf[0] = HPIA_A; /* Load HPI address register for DSP A */
 	rbuf[1] = 0x00ff;
 	rbuf[2] = 0x001f;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);  
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 	rbuf[0] = HPIA_B; /* Load HPI address register for DSP B */
 	rbuf[1] = 0xff;
 	rbuf[2] = 0x1f;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	return 0;
 }
