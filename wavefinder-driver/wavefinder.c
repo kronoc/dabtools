@@ -392,7 +392,8 @@ static ssize_t wavefinder_read(struct file *file, char __user *buf, size_t count
 	unsigned long flags;
 	int cnt = 0, err, rem;
 
-        /* dbg("wavefinder_read"); */
+	if (!s)
+		return -EBADFD;
 
 	if (*ppos)
 		return -ESPIPE;
