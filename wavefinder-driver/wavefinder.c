@@ -173,7 +173,19 @@ static void wavefinder_iso_complete(struct urb *purb)
 	char *bptr, *uptr;
 	const unsigned char vhdr[] = {0x0c, 0x62};  /* Valid packets start like this */ 
 
-	//dump_urb(purb);
+	// Check URB status
+	switch (purb->status) {
+		case 0:
+			break;
+		case -ETIMEDOUT:
+		case -ENOENT:
+		case -EPROTO:
+		case -ECONNRESET:
+		case -ESHUTDOWN:
+			return;
+		default:
+			//trace_printk("wavefinder_iso_complete: unknown urb status: %i\n", purb->status);
+	}
 
 	j=0;
 	while ((purb != s->wfurb[j]) && (j < NURBS))
@@ -181,42 +193,47 @@ static void wavefinder_iso_complete(struct urb *purb)
 
 	if (j < NURBS)
 		s->running[j] = 0;
-	else
-		dbg("wavefinder_iso_complete: invalid urb %d", j);
+	else {
+		//trace_printk("wavefinder_iso_complete: invalid urb %d", j);
+		return;
+	}
 
-	/* process if URB was not killed */
-	if (purb->status != -ENOENT) {
-		//dbg("wavefinder_iso_complete urb %d",j);
+	/* process if recbuf pointer is not null */
+	if (s->recbuf) {
 		for (i = 0; i < purb->number_of_packets; i++) {
 			uptr = purb->transfer_buffer+purb->iso_frame_desc[i].offset;
 			if (!purb->iso_frame_desc[i].status) {
 				len = purb->iso_frame_desc[i].actual_length;
 				if (len <= s->pipesize) {
-					/*  Won't copy bad/duplicate packets */
-					if (!strncmp(vhdr, uptr, 2) && strncmp(uptr, s->prev_h, 12)) {
+					// Don't copy bad packets
+					// Don't copy duplicate packets
+					// Don't exceed buffer length
+					if (!strncmp(vhdr, uptr, 2) && strncmp(uptr, s->prev_h, 12) && ((s->count + len) < purb->transfer_buffer_length * NURBS)) {
 						bptr = s->recbuf + (s->count % (_ISOPIPESIZE * NURBS));
 						memcpy(bptr, uptr, len);
 						memcpy(s->prev_h, bptr, 12);
 						s->count += len;
 						pkts++;
 					}
-				} else
-					dbg("wavefinder_iso_complete: invalid len %d", len);
-			} else
-				dbg("wavefinder_iso_complete: corrupted packet status: %d", purb->iso_frame_desc[i].status);
-			
+				} else {
+					//trace_printk("wavefinder_iso_complete: invalid len %d", len);
+				}
+			} else {
+				//trace_printk("wavefinder_iso_complete: corrupted packet status: %d", purb->iso_frame_desc[i].status);
+			}
 		}
 	}
 	
 	wavefinder_prepare_urb(s, s->wfurb[j]);
 	if ((subret = usb_submit_urb(s->wfurb[j], GFP_ATOMIC)) == 0) {
 		s->running[j] = 1;
-	} else
-		dbg("wavefinder_iso_complete: usb_submit_urb failed %d\n", subret);
+	} else {
+		//trace_printk("wavefinder_iso_complete: usb_submit_urb failed %d\n", subret);
+	}
 	
 	if (atomic_dec_and_test(&s->pending_io) && !s->remove_pending && s->state != _stopped) {
 		s->overruns++;
-		err("overrun (%d)", s->overruns);
+		//trace_printk("wavefinder_iso_complete: overrun (%d)", s->overruns);
 	}
 
 	wake_up(&s->wait);
