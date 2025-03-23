@@ -56,7 +56,7 @@
 #define DRIVER_DESC "WaveFinder Driver for Linux (c)2005-2015"
 
 #define err(format, arg...) printk(KERN_ALERT format "\n", ## arg)
-#define dbg(format, arg...) printk(KERN_ALERT format "\n", ## arg)
+#define dbg(format, arg...) printk(KERN_INFO format "\n", ## arg)
 
 #define WAVEFINDER_MINOR 240
 #define WAVEFINDER_VERSION 0x1000
@@ -244,7 +244,7 @@ static int wavefinder_free_buffers(pwavefinder_t s)
 {
 	int i;
 
-	dbg("wavefinder_free_buffers");
+	//dbg("wavefinder_free_buffers");
 
 	for (i=0; i < NURBS; i++) {
 		if (s->allocated[i]) {
@@ -272,7 +272,7 @@ static int wavefinder_alloc_buffers(pwavefinder_t s)
 	int transfer_buffer_length;
 	int i,j;
 	
-	dbg("wavefinder_alloc_buffers");
+	//dbg("wavefinder_alloc_buffers");
 
 	if (!pipesize)	{
 		err("ISO-pipe has size 0!!");
@@ -281,8 +281,8 @@ static int wavefinder_alloc_buffers(pwavefinder_t s)
 	packets = _ISOPIPESIZE / pipesize;
 	transfer_buffer_length = packets * pipesize;
 	
-	/*dbg("wavefinder_alloc_buffers pipesize:%d packets:%d transfer_buffer_len:%d",
-	  pipesize, packets, transfer_buffer_length);*/
+	//dbg("wavefinder_alloc_buffers: pipesize:%d packets:%d transfer_buffer_len:%d",
+	//  pipesize, packets, transfer_buffer_length);
 
 	s->pipesize = pipesize;
 
@@ -336,7 +336,7 @@ static int wavefinder_stop(pwavefinder_t s)
 {
         int i;
 
-	dbg("wavefinder_stop");
+	//dbg("wavefinder_stop");
 
 	s->state = _stopped;
 	for (i=0; i < NURBS; i++) {
@@ -1033,7 +1033,7 @@ static int wavefinder_leds(pwavefinder_t s, u32 arg)
 	green = (arg >> 10) & 0x3ff;
 	blue = arg & 0x3ff;
 
-	dbg("wavefinder: Setting LEDS: red=0x%03x, green=0x%03x, blue=0x%03x\n",red,green,blue);
+	dbg("wavefinder: Setting LEDS: red=0x%03x, green=0x%03x, blue=0x%03x",red,green,blue);
 
 	wf_mem_write(s, PWMCH2STOP, red);
 	wf_mem_write(s, PWMCH3STOP, green);
@@ -1044,7 +1044,7 @@ static int wavefinder_leds(pwavefinder_t s, u32 arg)
 
 static int wavefinder_tune(pwavefinder_t s, u32 freq_khz)
 {
-	dbg("wavefinder: Request to tune to %u HZ\n",freq_khz);
+	dbg("wavefinder: Request to tune to %u HZ",freq_khz);
 
   	wavefinder_leds(s,(0x3ff << 20) | (0x180 << 10) | 0x3ff); /* Green LED on as simple indicator */
 	wf_tune(s, freq_khz);
@@ -1084,7 +1084,7 @@ static int wavefinder_release(struct inode *inode, struct file *file)
 {
 	pwavefinder_t s = (pwavefinder_t) file->private_data;
 
-	dbg("wavefinder_release");
+	//dbg("wavefinder_release");
 
 	down(&s->mutex);
         /* The following two lines are from wf_close() in the opendab application code */
@@ -1166,12 +1166,12 @@ static int wavefinder_open(struct inode *inode, struct file *file)
 	pwavefinder_t s;
 	struct usb_interface *interface;
 
-	dbg("wavefinder_open");
+	//dbg("wavefinder_open");
 
 	devnum = iminor(inode);
 
 	interface = usb_find_interface (&wavefinder_driver, devnum);
-	dbg("wavefinder_open: devnum = %d", devnum);
+	//dbg("wavefinder_open: devnum = %d", devnum);
 	s = usb_get_intfdata(interface);
 
 	down(&s->mutex);
@@ -1259,11 +1259,11 @@ static int wavefinder_probe(struct usb_interface *intf,
 		err("reset_configuration failed");
 		goto reject;
 	} 
-	dbg("bound to interface: %d", intf->altsetting->desc.bInterfaceNumber);
+	//dbg("bound to interface: %d", intf->altsetting->desc.bInterfaceNumber);
 	usb_set_intfdata(intf, s);
 	up(&s->mutex);
 
-	dbg("wavefinder: probe: intf->minor:%d",intf->minor);
+	//dbg("wavefinder: probe: intf->minor:%d",intf->minor);
 
 	if (retval) {
 		usb_set_intfdata(intf, NULL);
@@ -1283,7 +1283,7 @@ static void wavefinder_disconnect(struct usb_interface *intf)
         wait_queue_entry_t __wait;
 	pwavefinder_t s = usb_get_intfdata(intf);
 
-	dbg("wavefinder_disconnect");
+	//dbg("wavefinder_disconnect");
 
 	init_waitqueue_entry(&__wait, current);
 
@@ -1317,15 +1317,15 @@ static int __init wavefinder_init(void)
 {
         int retval;
 
-	dbg("wavefinder_init");
+	//dbg("wavefinder_init");
 
 	/* register misc device */
 	retval = usb_register(&wavefinder_driver);
 	if (retval)
 		goto out;
 
-	dbg("wavefinder_init: driver registered");
-	dbg(DRIVER_VERSION ": " DRIVER_DESC);
+	//dbg("wavefinder_init: driver registered");
+	dbg("wavefinder: " DRIVER_DESC " (" DRIVER_VERSION ")");
 
 out:
 	return retval;
@@ -1333,11 +1333,11 @@ out:
 
 static void __exit wavefinder_cleanup(void)
 {
-	dbg("wavefinder_cleanup");
+	//dbg("wavefinder_cleanup");
 
 	usb_deregister(&wavefinder_driver);
 
-	dbg("wavefinder_cleanup finished");
+	//dbg("wavefinder_cleanup finished");
 }
 
 
