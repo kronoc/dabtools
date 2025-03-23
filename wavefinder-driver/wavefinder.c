@@ -945,14 +945,17 @@ static void wf_tune(pwavefinder_t s, u32 freq_khz)
 	/* Load the RF R counter of the Band L PLL - constants */
 	rc = 0x100000 | reverse_bits(R_2331A, 15) << 5 | 0x10;
 	wf_tune_msg(s, rc, 22, LMX2331A, lband);
+	usleep_range(5000,5000);
 
 	/* Load the RF N counter of the Band L PLL - constants */
 	rc = 0x300000 | reverse_bits(NRFA_2331A, 7) << 13 | reverse_bits(NRFB_2331A, 11) << 2 | 2;
 	wf_tune_msg(s, rc, 22, LMX2331A, lband);
+	usleep_range(5000,5000);
 
 	/* Load the IF R counter of the Band L PLL - constants */ 
 	rc = reverse_bits(R_2331A, 15) << 5 | 0x10;
 	wf_tune_msg(s, rc, 22, LMX2331A, lband);
+	usleep_range(5000,5000);
 
 	/* Load the N counter of the Band III PLL - this does the tuning */
 	tmp = (freq_khz + IF_KHZ);
@@ -963,6 +966,7 @@ static void wf_tune(pwavefinder_t s, u32 freq_khz)
 	/* Load the IF N counter of the Band L PLL - constants */
 	rc = 0x200000 | reverse_bits(NIFA_2331A, 7) << 13 | reverse_bits(NIFB_2331A, 11) << 2 | 2;
 	wf_tune_msg(s, rc, 22, LMX2331A, lband);
+	usleep_range(5000,5000);
 
 	b_1511 = f_vco / P_1511;
 	a_1511 = f_vco % P_1511;
@@ -970,6 +974,7 @@ static void wf_tune(pwavefinder_t s, u32 freq_khz)
 	/* Load the R counter and S latch of the Band III PLL - constants */
 	rc = 0x8000 | (reverse_bits((int)R_1511, 14)) << 1 | 1;
 	wf_tune_msg(s, rc, 16, LMX1511, lband);
+	usleep_range(5000,5000);
 
 	/* Load the N counter (as A and B counters) of the Band III PLL */
 	rc = reverse_bits(a_1511,7) << 11 | reverse_bits(b_1511,11);
@@ -1062,28 +1067,29 @@ static int wavefinder_tune(pwavefinder_t s, u32 freq_khz)
 	wf_timing(s, 1);
 	usleep_range(4000,4000); // WAS: wf_sleep(4000);
 	wf_timing(s, 2);
-	msleep(50); // WAS: wf_sleep(50000);
+	msleep(150); // WAS: wf_sleep(50000);
 	wf_mem_write(s, DACVALUE, 0x5330);
+	usleep_range(15000,15000); // WAS: wf_sleep(4000);
 	wf_mem_write(s, DACVALUE, 0x5330);
 	msleep(77); // WAS: wf_sleep(77000);
 	/* The next control message causes the WaveFinder to start sending
 	   isochronous data */
 	wf_req1req2(s, 1, 1);
 	/* wf_read(s, of, &pkts); */
-	wf_mem_write(s, PWMCTRLREG, 0x800f);
-	wf_timing(s, 1);
-	wf_timing(s, 2);
-	wf_timing(s, 1);
-	wf_timing(s, 3);
-	wf_tune(s, freq_khz);
-	msleep(200); // WAS: wf_sleep(200000);
-	wf_timing(s, 4);
-	wf_tune(s, freq_khz);
-	msleep(200); // WAS: wf_sleep(200000);
-	wf_tune(s, freq_khz);
-	msleep(200); // WAS: wf_sleep(200000);
-	wf_mem_write(s, DACVALUE, 0x5330);
-        return 0;
+	// wf_mem_write(s, PWMCTRLREG, 0x800f);
+	// wf_timing(s, 1);
+	// wf_timing(s, 2);
+	// wf_timing(s, 1);
+	// wf_timing(s, 3);
+	// wf_tune(s, freq_khz);
+	// msleep(200); // WAS: wf_sleep(200000);
+	// wf_timing(s, 4);
+	// wf_tune(s, freq_khz);
+	// msleep(200); // WAS: wf_sleep(200000);
+	// wf_tune(s, freq_khz);
+	// msleep(200); // WAS: wf_sleep(200000);
+	// wf_mem_write(s, DACVALUE, 0x5330);
+    return 0;
 }
 
 static int wavefinder_release(struct inode *inode, struct file *file)
