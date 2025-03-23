@@ -292,10 +292,10 @@ static int wavefinder_alloc_buffers(pwavefinder_t s)
 			err("usb_alloc_urb == NULL");
 			goto err;
 		}
-		s->wfurb[i]->transfer_buffer = kmalloc(transfer_buffer_length, GFP_KERNEL);
+		s->wfurb[i]->transfer_buffer = kzalloc(transfer_buffer_length, GFP_KERNEL);
 		if (!s->wfurb[i]->transfer_buffer) {
 			kfree(s->wfurb[i]->transfer_buffer);
-			err("kmalloc(%d)==NULL", transfer_buffer_length);
+			err("kzalloc(%d)==NULL", transfer_buffer_length);
 			goto err;
 		}
 
@@ -316,11 +316,11 @@ static int wavefinder_alloc_buffers(pwavefinder_t s)
 		s->running[i] = 0;
 	}
 	
-	s->recbuf = kmalloc(transfer_buffer_length*NURBS, GFP_KERNEL);
+	s->recbuf = kzalloc(transfer_buffer_length*NURBS, GFP_KERNEL);
 	
 	if (!s->recbuf) {
 		kfree(s->recbuf);
-		err("kmalloc(%d)==NULL (recbuf)", transfer_buffer_length*NURBS);
+		err("kzalloc(%d)==NULL (recbuf)", transfer_buffer_length*NURBS);
 		goto err;
 	}
 
