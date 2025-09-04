@@ -6,5 +6,5 @@ PWD         := $(shell pwd)
 DEBUG	    := 1
 
 default:
-	$(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
 endif

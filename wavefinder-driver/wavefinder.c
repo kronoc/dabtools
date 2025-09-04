@@ -43,6 +43,7 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
 #include <linux/smp_lock.h>
 #endif
+#include <linux/sched/signal.h>
 
 #include "wavefinder.h"
 #include "wfsl11r.h"
@@ -55,7 +56,7 @@
 #define DRIVER_DESC "WaveFinder Driver for Linux (c)2005-2015"
 
 #define err(format, arg...) printk(KERN_ALERT format "\n", ## arg)
-#define dbg(format, arg...) printk(KERN_ALERT format "\n", ## arg)
+#define dbg(format, arg...) printk(KERN_INFO format "\n", ## arg)
 
 #define WAVEFINDER_MINOR 240
 #define WAVEFINDER_VERSION 0x1000
@@ -164,7 +165,7 @@ static int wavefinder_prepare_urb(pwavefinder_t s, struct urb *purb)
 	return 0;
 }
 
-static void wavefinder_iso_complete(struct urb *purb, struct pt_regs *regs)
+static void wavefinder_iso_complete(struct urb *purb)
 {
 	pwavefinder_t s = purb->context;
 	int i,j, subret, pkts = 0;
@@ -172,7 +173,19 @@ static void wavefinder_iso_complete(struct urb *purb, struct pt_regs *regs)
 	char *bptr, *uptr;
 	const unsigned char vhdr[] = {0x0c, 0x62};  /* Valid packets start like this */ 
 
-	//dump_urb(purb);
+	// Check URB status
+	switch (purb->status) {
+		case 0:
+			break;
+		case -ETIMEDOUT:
+		case -ENOENT:
+		case -EPROTO:
+		case -ECONNRESET:
+		case -ESHUTDOWN:
+			return;
+		default:
+			//trace_printk("wavefinder_iso_complete: unknown urb status: %i\n", purb->status);
+	}
 
 	j=0;
 	while ((purb != s->wfurb[j]) && (j < NURBS))
@@ -180,42 +193,47 @@ static void wavefinder_iso_complete(struct urb *purb, struct pt_regs *regs)
 
 	if (j < NURBS)
 		s->running[j] = 0;
-	else
-		dbg("wavefinder_iso_complete: invalid urb %d", j);
+	else {
+		//trace_printk("wavefinder_iso_complete: invalid urb %d", j);
+		return;
+	}
 
-	/* process if URB was not killed */
-	if (purb->status != -ENOENT) {
-		//dbg("wavefinder_iso_complete urb %d",j);
+	/* process if recbuf pointer is not null */
+	if (s->recbuf) {
 		for (i = 0; i < purb->number_of_packets; i++) {
 			uptr = purb->transfer_buffer+purb->iso_frame_desc[i].offset;
 			if (!purb->iso_frame_desc[i].status) {
 				len = purb->iso_frame_desc[i].actual_length;
 				if (len <= s->pipesize) {
-					/*  Won't copy bad/duplicate packets */
-					if (!strncmp(vhdr, uptr, 2) && strncmp(uptr, s->prev_h, 12)) {
+					// Don't copy bad packets
+					// Don't copy duplicate packets
+					// Don't exceed buffer length
+					if (!strncmp(vhdr, uptr, 2) && strncmp(uptr, s->prev_h, 12) && ((s->count + len) < purb->transfer_buffer_length * NURBS)) {
 						bptr = s->recbuf + (s->count % (_ISOPIPESIZE * NURBS));
 						memcpy(bptr, uptr, len);
 						memcpy(s->prev_h, bptr, 12);
 						s->count += len;
 						pkts++;
 					}
-				} else
-					dbg("wavefinder_iso_complete: invalid len %d", len);
-			} else
-				dbg("wavefinder_iso_complete: corrupted packet status: %d", purb->iso_frame_desc[i].status);
-			
+				} else {
+					//trace_printk("wavefinder_iso_complete: invalid len %d", len);
+				}
+			} else {
+				//trace_printk("wavefinder_iso_complete: corrupted packet status: %d", purb->iso_frame_desc[i].status);
+			}
 		}
 	}
 	
 	wavefinder_prepare_urb(s, s->wfurb[j]);
 	if ((subret = usb_submit_urb(s->wfurb[j], GFP_ATOMIC)) == 0) {
 		s->running[j] = 1;
-	} else
-		dbg("wavefinder_iso_complete: usb_submit_urb failed %d\n", subret);
+	} else {
+		//trace_printk("wavefinder_iso_complete: usb_submit_urb failed %d\n", subret);
+	}
 	
 	if (atomic_dec_and_test(&s->pending_io) && !s->remove_pending && s->state != _stopped) {
 		s->overruns++;
-		err("overrun (%d)", s->overruns);
+		//trace_printk("wavefinder_iso_complete: overrun (%d)", s->overruns);
 	}
 
 	wake_up(&s->wait);
@@ -226,7 +244,7 @@ static int wavefinder_free_buffers(pwavefinder_t s)
 {
 	int i;
 
-	dbg("wavefinder_free_buffers");
+	//dbg("wavefinder_free_buffers");
 
 	for (i=0; i < NURBS; i++) {
 		if (s->allocated[i]) {
@@ -249,12 +267,12 @@ static int wavefinder_free_buffers(pwavefinder_t s)
 static int wavefinder_alloc_buffers(pwavefinder_t s)
 {
 	unsigned int pipe = usb_rcvisocpipe(s->usbdev, _WAVEFINDER_ISOPIPE);
-	int pipesize = usb_maxpacket(s->usbdev, pipe, usb_pipeout(pipe));
+	int pipesize = usb_maxpacket(s->usbdev, pipe);
 	int packets;
 	int transfer_buffer_length;
 	int i,j;
 	
-	dbg("wavefinder_alloc_buffers");
+	//dbg("wavefinder_alloc_buffers");
 
 	if (!pipesize)	{
 		err("ISO-pipe has size 0!!");
@@ -263,8 +281,8 @@ static int wavefinder_alloc_buffers(pwavefinder_t s)
 	packets = _ISOPIPESIZE / pipesize;
 	transfer_buffer_length = packets * pipesize;
 	
-	/*dbg("wavefinder_alloc_buffers pipesize:%d packets:%d transfer_buffer_len:%d",
-	  pipesize, packets, transfer_buffer_length);*/
+	//dbg("wavefinder_alloc_buffers: pipesize:%d packets:%d transfer_buffer_len:%d",
+	//  pipesize, packets, transfer_buffer_length);
 
 	s->pipesize = pipesize;
 
@@ -274,10 +292,10 @@ static int wavefinder_alloc_buffers(pwavefinder_t s)
 			err("usb_alloc_urb == NULL");
 			goto err;
 		}
-		s->wfurb[i]->transfer_buffer = kmalloc(transfer_buffer_length, GFP_KERNEL);
+		s->wfurb[i]->transfer_buffer = kzalloc(transfer_buffer_length, GFP_KERNEL);
 		if (!s->wfurb[i]->transfer_buffer) {
 			kfree(s->wfurb[i]->transfer_buffer);
-			err("kmalloc(%d)==NULL", transfer_buffer_length);
+			err("kzalloc(%d)==NULL", transfer_buffer_length);
 			goto err;
 		}
 
@@ -298,11 +316,11 @@ static int wavefinder_alloc_buffers(pwavefinder_t s)
 		s->running[i] = 0;
 	}
 	
-	s->recbuf = kmalloc(transfer_buffer_length*NURBS, GFP_KERNEL);
+	s->recbuf = kzalloc(transfer_buffer_length*NURBS, GFP_KERNEL);
 	
 	if (!s->recbuf) {
 		kfree(s->recbuf);
-		err("kmalloc(%d)==NULL (recbuf)", transfer_buffer_length*NURBS);
+		err("kzalloc(%d)==NULL (recbuf)", transfer_buffer_length*NURBS);
 		goto err;
 	}
 
@@ -318,7 +336,7 @@ static int wavefinder_stop(pwavefinder_t s)
 {
         int i;
 
-	dbg("wavefinder_stop");
+	//dbg("wavefinder_stop");
 
 	s->state = _stopped;
 	for (i=0; i < NURBS; i++) {
@@ -374,12 +392,13 @@ static ssize_t wavefinder_read(struct file *file, char __user *buf, size_t count
 	unsigned long flags;
 	int cnt = 0, err, rem;
 
-        /* dbg("wavefinder_read"); */
+	if (!s)
+		return -EBADFD;
 
 	if (*ppos)
 		return -ESPIPE;
 
-	if (!access_ok(VERIFY_WRITE, buf, count))
+	if (!access_ok(buf, count))
 		return -EFAULT;
 
 	add_wait_queue(&s->wait, &wait);
@@ -475,7 +494,7 @@ static int wf_sendmem(pwavefinder_t s, int value, int index, unsigned char *byte
 */
 static int wf_mem_write(pwavefinder_t s, unsigned short addr, unsigned short val)
 {
-	unsigned char bytes[4];
+	unsigned char *bytes = kzalloc(4, GFP_KERNEL);
 
 	bytes[0] = (unsigned char)(addr & 0xff);
 	bytes[1] = (unsigned char)((addr >> 8) & 0xff);
@@ -493,9 +512,8 @@ static int wf_mem_write(pwavefinder_t s, unsigned short addr, unsigned short val
 static int wf_tune_msg(pwavefinder_t s, unsigned int reg, unsigned char bits, unsigned char pll, int lband)
 {
 #define TBUFSIZE 12
-	unsigned char tbuf[TBUFSIZE];
+	unsigned char *tbuf = kzalloc(TBUFSIZE, GFP_KERNEL);
 
-	memset(tbuf, 0, TBUFSIZE);  /* zero buffer */
 	tbuf[0] = reg & 0xff;
 	tbuf[1] = (reg >> 8) & 0xff;
 	tbuf[2] = (reg >> 16) & 0xff;
@@ -569,8 +587,8 @@ static int wf_boot_dsps(pwavefinder_t s)
 	unsigned short addrreg[2] = {HPIA_B, HPIA_A};
 	unsigned short datareg[2] = {HPID_B, HPID_A};
 	unsigned short entry_pt[2];
-	unsigned short rbuf[3];
-	unsigned char ubuf[USBDATALEN*2];
+	unsigned short *rbuf = kzalloc(3, GFP_KERNEL);
+	unsigned char *ubuf = kzalloc(USBDATALEN * 2, GFP_KERNEL);
 	const struct firmware *fw = NULL;
 	const unsigned char *cbuf;
 	int i,j,remain, left, frames;
@@ -582,22 +600,22 @@ static int wf_boot_dsps(pwavefinder_t s)
 	rbuf[0] = HPIA_B; /* Load HPI address register */
 	rbuf[1] = 0x00e0;
 	rbuf[2] = 0x0000;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPID_B; /* Load HPI data register */
 	rbuf[1] = 0x0000;
 	rbuf[2] = 0x0000;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);  
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPIC_B; /* Load HPI control register */
 	rbuf[1] = 0x0001;
 	rbuf[2] = 0x0001;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPIC_A; /* Load HPI control register */
 	rbuf[1] = 0x0001;
 	rbuf[2] = 0x0001;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	if (request_firmware(&fw, "wavefinder.fw", &s->usbdev->dev)) {
 		printk("wavefinder:%s: firmware wavefinder.fw not found\n", __func__);
@@ -614,7 +632,7 @@ static int wf_boot_dsps(pwavefinder_t s)
 		rbuf[0] = addrreg[i]; /* Load HPI address register - actually at 0x0080 because of inc. */
 		rbuf[1] = 0x007f;
 		rbuf[2] = 0x0000;
-		wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+		wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 		frames = 0;
 		memset(ubuf, 0, USBDATALEN*2);  /* zero buffer - unnecessary but less confusing to debug */    
@@ -625,13 +643,13 @@ static int wf_boot_dsps(pwavefinder_t s)
 			if (remain >= USBDATALEN) {
 				for (j=2; j < USBDATALEN*2; j+=2)
 					ubuf[j] = *(cbuf + 0x2001 - remain--);
-				wf_sendmem(s, datareg[i], 0, (unsigned char*)&ubuf, USBDATALEN*2);
+				wf_sendmem(s, datareg[i], 0, (unsigned char*)ubuf, USBDATALEN*2);
 				frames++;
 			} else {
 				left = remain*2;
 				for (j=0; j < left; j+=2)
 					ubuf[j+2] = *(cbuf + 0x2000 - remain--);
-				wf_sendmem(s, datareg[i], 0, (unsigned char*)&ubuf, left);
+				wf_sendmem(s, datareg[i], 0, (unsigned char*)ubuf, left);
 				frames++;
 			}
 		}
@@ -647,44 +665,44 @@ static int wf_boot_dsps(pwavefinder_t s)
 	rbuf[0] = HPIA_A; /* Load HPI address register for DSP A */
 	rbuf[1] = 0x007e; /* = 0x007f after increment */
 	rbuf[2] = 0x0000;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPIA_B; /* Load HPI address register for DSP B */
 	rbuf[1] = 0x007e; /* = 0x007f after increment */
 	rbuf[2] = 0x0000;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPID_A; /* Load HPI data register for DSP A */
 	rbuf[1] = entry_pt[1] & 0xff;
 	rbuf[2] = (entry_pt[1] & 0xff00) >> 8;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);  
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	rbuf[0] = HPID_B; /* Load HPI data register for DSP B */
 	rbuf[1] = entry_pt[0] & 0xff;;
 	rbuf[2] = (entry_pt[0] & 0xff00) >> 8;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	/* This also gets sent. TODO: why ? */
 	rbuf[0] = HPIA_B; /* Load HPI address register for DSP B */
 	rbuf[1] = 0x00ff;
 	rbuf[2] = 0x003e;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);  
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 	rbuf[0] = HPID_B; /* Load HPI data register for DSP B */
 	rbuf[1] = 0x00;
 	rbuf[2] = 0x00;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 	rbuf[0] = HPID_B; /* Load HPI data register for DSP B */
 	rbuf[1] = 0x00;
 	rbuf[2] = 0x00;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 	rbuf[0] = HPIA_A; /* Load HPI address register for DSP A */
 	rbuf[1] = 0x00ff;
 	rbuf[2] = 0x001f;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);  
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 	rbuf[0] = HPIA_B; /* Load HPI address register for DSP B */
 	rbuf[1] = 0xff;
 	rbuf[2] = 0x1f;
-	wf_sendmem(s, 0, 0, (unsigned char*)&rbuf, 6);
+	wf_sendmem(s, 0, 0, (unsigned char*)rbuf, 6);
 
 	return 0;
 }
@@ -699,25 +717,29 @@ static int wf_boot_dsps(pwavefinder_t s)
 */
 static int wf_req1req2(pwavefinder_t s, int reqnum, int msgnum)
 {
-	/* unsigned char r0[] = {0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00,
-			      0x9d,0x3f,0x1b,0xff,0xd4,0xeb,0x7c,0xdd,
-			      0x05,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-			      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-			      0x80,0xd4,0x92,0xda,0xe0,0x80,0x92,0xda,
-			      0x02,0x80,0x00,0x00,0x00,0x00,0x00,0x00,
-			      0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-			      0x00,0x00,0x00,0x00,0x27,0x4a,0x1b,0xff};
+	unsigned char r0[] = {
+		0x00,0x00,0x00,0x00,0xe0,0x48,0x7a,0xbe,
+		0x3d,0x2c,0x3d,0xbe,0xc8,0x48,0x7a,0xbe,
+		0x05,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0xe8,0xd6,0xcd,0x81,0xe0,0x90,0xd8,0x81,
+		0x00,0x90,0x04,0x81,0x01,0x00,0x00,0x00,
+		0xd0,0x48,0x7a,0xbe,0xd0,0x48,0x7a,0xbe,
+		0x00,0x00,0x00,0x00,0xc7,0x36,0x3d,0xbe
+	};
 
-	unsigned char r3[] = {0x93,0x02,0x00,0x00,0x32,0x15,0x03,0xc0,
-			      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-			      0xb0,0x71,0x02,0xc0,0x00,0x00,0x00,0x00,
-			      0x00,0x02,0x00,0x00,0x93,0x02,0x00,0x00,
-			      0x87,0x15,0x03,0xc0,0x31,0x0e,0x03,0xc0,
-			      0xfc,0x80,0x92,0xda,0x95,0xf1,0x02,0xc0,
-			      0x2a,0xba,0x02,0xc0,0xfc,0x80,0x92,0xda,
-			      0x05,0x37,0x1b,0xff,0x0d,0x37,0x1b,0xff}; */
+	unsigned char r3[] = {
+		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x46,0x02,0x00,0x00,0xe6,0xb4,0x06,0x80,
+		0xe6,0xb4,0x06,0x80,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x46,0x02,0x00,0x00,
+		0xe6,0xb4,0x06,0x80,0x00,0x00,0x00,0x00,
+		0x00,0x00,0x00,0x00,0x46,0x02,0x00,0x00,
+		0xe6,0xb4,0x06,0x80,0xb0,0xfc,0xe2,0x81,
+		0xa5,0x23,0x3d,0xbe,0xad,0x23,0x3d,0xbe
+	};
 
-        unsigned char r2[] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    unsigned char r2[] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 			      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 			      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 			      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -727,16 +749,18 @@ static int wf_req1req2(pwavefinder_t s, int reqnum, int msgnum)
 			      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 
 	/* unsigned char *p = r0; */
-	unsigned char *p = r2;
+	unsigned char *p = kzalloc(64, GFP_KERNEL);
 
 	switch (msgnum) {
 	case 0:
-		/*p = r0;*/
-		p = r2;
+		//p = r0;
+		//p = r2;
+		memcpy(p, r0, 64);
 		break;
 	case 1:
-		/*p = r3;*/
-		p = r2;
+		//p = r3;
+		//p = r2;
+		memcpy(p, r3, 64);
 		break;
 	}
 
@@ -921,14 +945,17 @@ static void wf_tune(pwavefinder_t s, u32 freq_khz)
 	/* Load the RF R counter of the Band L PLL - constants */
 	rc = 0x100000 | reverse_bits(R_2331A, 15) << 5 | 0x10;
 	wf_tune_msg(s, rc, 22, LMX2331A, lband);
+	usleep_range(5000,5000);
 
 	/* Load the RF N counter of the Band L PLL - constants */
 	rc = 0x300000 | reverse_bits(NRFA_2331A, 7) << 13 | reverse_bits(NRFB_2331A, 11) << 2 | 2;
 	wf_tune_msg(s, rc, 22, LMX2331A, lband);
+	usleep_range(5000,5000);
 
 	/* Load the IF R counter of the Band L PLL - constants */ 
 	rc = reverse_bits(R_2331A, 15) << 5 | 0x10;
 	wf_tune_msg(s, rc, 22, LMX2331A, lband);
+	usleep_range(5000,5000);
 
 	/* Load the N counter of the Band III PLL - this does the tuning */
 	tmp = (freq_khz + IF_KHZ);
@@ -939,6 +966,7 @@ static void wf_tune(pwavefinder_t s, u32 freq_khz)
 	/* Load the IF N counter of the Band L PLL - constants */
 	rc = 0x200000 | reverse_bits(NIFA_2331A, 7) << 13 | reverse_bits(NIFB_2331A, 11) << 2 | 2;
 	wf_tune_msg(s, rc, 22, LMX2331A, lband);
+	usleep_range(5000,5000);
 
 	b_1511 = f_vco / P_1511;
 	a_1511 = f_vco % P_1511;
@@ -946,6 +974,7 @@ static void wf_tune(pwavefinder_t s, u32 freq_khz)
 	/* Load the R counter and S latch of the Band III PLL - constants */
 	rc = 0x8000 | (reverse_bits((int)R_1511, 14)) << 1 | 1;
 	wf_tune_msg(s, rc, 16, LMX1511, lband);
+	usleep_range(5000,5000);
 
 	/* Load the N counter (as A and B counters) of the Band III PLL */
 	rc = reverse_bits(a_1511,7) << 11 | reverse_bits(b_1511,11);
@@ -979,26 +1008,26 @@ static int wf_timing(pwavefinder_t s, int msgnum)
 			      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x00};
 
-	unsigned char *p;
+	unsigned char *p = kzalloc(32, GFP_KERNEL);
 
 	switch (msgnum) {
 	case 0:
-		p = m0;
+		memcpy(p, m0, 32);
 		break;
 	case 1:
-		p = m1;
+		memcpy(p, m1, 32);
 		break;
 	case 2:
-		p = m2;
+		memcpy(p, m2, 32);
 		break;
 	case 3:
-		p = m3;
+		memcpy(p, m3, 32);
 		break;
 	case 4:
-		p = m4;
+		memcpy(p, m4, 32);
 		break;
 	default:
-		p = m0;
+		memcpy(p, m0, 32);
 		break;
 	}
 
@@ -1015,7 +1044,7 @@ static int wavefinder_leds(pwavefinder_t s, u32 arg)
 	green = (arg >> 10) & 0x3ff;
 	blue = arg & 0x3ff;
 
-	dbg("wavefinder: Setting LEDS: red=0x%03x, green=0x%03x, blue=0x%03x\n",red,green,blue);
+	dbg("wavefinder: Setting LEDS: red=0x%03x, green=0x%03x, blue=0x%03x",red,green,blue);
 
 	wf_mem_write(s, PWMCH2STOP, red);
 	wf_mem_write(s, PWMCH3STOP, green);
@@ -1026,7 +1055,7 @@ static int wavefinder_leds(pwavefinder_t s, u32 arg)
 
 static int wavefinder_tune(pwavefinder_t s, u32 freq_khz)
 {
-	dbg("wavefinder: Request to tune to %u HZ\n",freq_khz);
+	dbg("wavefinder: Request to tune to %u HZ",freq_khz);
 
   	wavefinder_leds(s,(0x3ff << 20) | (0x180 << 10) | 0x3ff); /* Green LED on as simple indicator */
 	wf_tune(s, freq_khz);
@@ -1038,35 +1067,36 @@ static int wavefinder_tune(pwavefinder_t s, u32 freq_khz)
 	wf_timing(s, 1);
 	usleep_range(4000,4000); // WAS: wf_sleep(4000);
 	wf_timing(s, 2);
-	msleep(50); // WAS: wf_sleep(50000);
+	msleep(150); // WAS: wf_sleep(50000);
 	wf_mem_write(s, DACVALUE, 0x5330);
+	usleep_range(15000,15000); // WAS: wf_sleep(4000);
 	wf_mem_write(s, DACVALUE, 0x5330);
 	msleep(77); // WAS: wf_sleep(77000);
 	/* The next control message causes the WaveFinder to start sending
 	   isochronous data */
 	wf_req1req2(s, 1, 1);
 	/* wf_read(s, of, &pkts); */
-	wf_mem_write(s, PWMCTRLREG, 0x800f);
-	wf_timing(s, 1);
-	wf_timing(s, 2);
-	wf_timing(s, 1);
-	wf_timing(s, 3);
-	wf_tune(s, freq_khz);
-	msleep(200); // WAS: wf_sleep(200000);
-	wf_timing(s, 4);
-	wf_tune(s, freq_khz);
-	msleep(200); // WAS: wf_sleep(200000);
-	wf_tune(s, freq_khz);
-	msleep(200); // WAS: wf_sleep(200000);
-	wf_mem_write(s, DACVALUE, 0x5330);
-        return 0;
+	// wf_mem_write(s, PWMCTRLREG, 0x800f);
+	// wf_timing(s, 1);
+	// wf_timing(s, 2);
+	// wf_timing(s, 1);
+	// wf_timing(s, 3);
+	// wf_tune(s, freq_khz);
+	// msleep(200); // WAS: wf_sleep(200000);
+	// wf_timing(s, 4);
+	// wf_tune(s, freq_khz);
+	// msleep(200); // WAS: wf_sleep(200000);
+	// wf_tune(s, freq_khz);
+	// msleep(200); // WAS: wf_sleep(200000);
+	// wf_mem_write(s, DACVALUE, 0x5330);
+    return 0;
 }
 
 static int wavefinder_release(struct inode *inode, struct file *file)
 {
 	pwavefinder_t s = (pwavefinder_t) file->private_data;
 
-	dbg("wavefinder_release");
+	//dbg("wavefinder_release");
 
 	down(&s->mutex);
         /* The following two lines are from wf_close() in the opendab application code */
@@ -1148,12 +1178,12 @@ static int wavefinder_open(struct inode *inode, struct file *file)
 	pwavefinder_t s;
 	struct usb_interface *interface;
 
-	dbg("wavefinder_open");
+	//dbg("wavefinder_open");
 
 	devnum = iminor(inode);
 
 	interface = usb_find_interface (&wavefinder_driver, devnum);
-	dbg("wavefinder_open: devnum = %d", devnum);
+	//dbg("wavefinder_open: devnum = %d", devnum);
 	s = usb_get_intfdata(interface);
 
 	down(&s->mutex);
@@ -1226,8 +1256,8 @@ static int wavefinder_probe(struct usb_interface *intf,
 	s->devnum = intf->minor;
 	s->state = _stopped;
 
-	dbg("wavefinder: probe: vendor id 0x%x, device id 0x%x ifnum:%d intf->minor:%d s=%ud wavefinder_t=%d",
-	    usbdev->descriptor.idVendor, usbdev->descriptor.idProduct, intf->altsetting->desc.bInterfaceNumber,intf->minor,(unsigned int)s,(int)(sizeof(wavefinder_t)));
+	dbg("wavefinder: probe: vendor id 0x%x, device id 0x%x ifnum:%d intf->minor:%d s=%p wavefinder_t=%d",
+	    usbdev->descriptor.idVendor, usbdev->descriptor.idProduct, intf->altsetting->desc.bInterfaceNumber,intf->minor,s,(int)(sizeof(wavefinder_t)));
 
 	if (intf->altsetting->desc.bInterfaceNumber != _WAVEFINDER_IF)
 	        goto reject;
@@ -1241,11 +1271,11 @@ static int wavefinder_probe(struct usb_interface *intf,
 		err("reset_configuration failed");
 		goto reject;
 	} 
-	dbg("bound to interface: %d", intf->altsetting->desc.bInterfaceNumber);
+	//dbg("bound to interface: %d", intf->altsetting->desc.bInterfaceNumber);
 	usb_set_intfdata(intf, s);
 	up(&s->mutex);
 
-	dbg("wavefinder: probe: intf->minor:%d",intf->minor);
+	//dbg("wavefinder: probe: intf->minor:%d",intf->minor);
 
 	if (retval) {
 		usb_set_intfdata(intf, NULL);
@@ -1262,10 +1292,10 @@ reject:
 
 static void wavefinder_disconnect(struct usb_interface *intf)
 {
-        wait_queue_t __wait;
+        wait_queue_entry_t __wait;
 	pwavefinder_t s = usb_get_intfdata(intf);
 
-	dbg("wavefinder_disconnect");
+	//dbg("wavefinder_disconnect");
 
 	init_waitqueue_entry(&__wait, current);
 
@@ -1299,15 +1329,15 @@ static int __init wavefinder_init(void)
 {
         int retval;
 
-	dbg("wavefinder_init");
+	//dbg("wavefinder_init");
 
 	/* register misc device */
 	retval = usb_register(&wavefinder_driver);
 	if (retval)
 		goto out;
 
-	dbg("wavefinder_init: driver registered");
-	dbg(DRIVER_VERSION ": " DRIVER_DESC);
+	//dbg("wavefinder_init: driver registered");
+	dbg("wavefinder: " DRIVER_DESC " (" DRIVER_VERSION ")");
 
 out:
 	return retval;
@@ -1315,11 +1345,11 @@ out:
 
 static void __exit wavefinder_cleanup(void)
 {
-	dbg("wavefinder_cleanup");
+	//dbg("wavefinder_cleanup");
 
 	usb_deregister(&wavefinder_driver);
 
-	dbg("wavefinder_cleanup finished");
+	//dbg("wavefinder_cleanup finished");
 }
 
 
