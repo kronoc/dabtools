@@ -2,6 +2,9 @@
 
 ## Introduction
 
+*This is a fork of a fork of dabtools, with a focus on improved support for
+RTL-SDR devices in an environment where multiple devices are in use.*
+
 dabtools is work-in-progress set of tools for reception, recording and
 playback of DAB and DAB+ digital radio broadcasts. It currently
 supports the Psion Wavefinder USB DAB tuner and any SDR tuner
