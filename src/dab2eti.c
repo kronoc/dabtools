@@ -19,7 +19,6 @@ david.may.muc@googlemail.com
 
 */
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +27,7 @@ david.may.muc@googlemail.com
 #include <signal.h>
 #include <rtl-sdr.h>
 #include <unistd.h>
+#include <ctype.h>
 #include "dab.h"
 #include "input_sdr.h"
 #include "input_wf.h"
@@ -238,14 +238,37 @@ static int do_wf_decode(struct dab_state_t* dab, int frequency)
   }
 }
 
+// Helper function to check if a string is all digits
+int is_digits(const char *str) {
+  while (*str) {
+    if (!isdigit((unsigned char)*str)) return 0;
+    str++;
+  }
+  return 1;
+}
+
+// Helper function to get device index from serial string
+int get_rtlsdr_index_by_serial(const char *serial) {
+  int32_t device_count = rtlsdr_get_device_count();
+  char dev_serial[256];
+  for (int i = 0; i < device_count; i++) {
+    rtlsdr_get_device_usb_strings(i, NULL, NULL, dev_serial);
+    if (dev_serial[0] && strcmp(dev_serial, serial) == 0) {
+      return i;
+    }
+  }
+  return -1; // Not found
+}
+
 void usage(void)
 {
   fprintf(stderr,
     "Usage: dab2eti -f frequency [-g gain] [-d device] [-t device_type]\n"
     "  -f frequency      (required, in Hz)\n"
     "  -g gain           (optional, tuner gain value; default: automatic)\n"
-    "  -d device         (optional: for wavefinder, device path; for rtlsdr, device index; default: 0)\n"
+    "  -d device         (optional: for wavefinder, device path; for rtlsdr, device index or serial; default: 0)\n"
     "  -t device_type    (optional: 'wavefinder' or 'rtlsdr'; default: rtlsdr)\n"
+    "    For rtlsdr: device can be index (e.g. 0) or serial string (e.g. \"00000001\")\n"
   );
 }
 
@@ -305,8 +328,18 @@ int main(int argc, char* argv[])
       return 1;
     }
   } else { // rtlsdr
-    // If device index provided, use it, else default to 0
-    device_index = device[0] ? atoi(device) : 0;
+    // Determine index, support serial string!
+    if (!device[0]) {
+      device_index = 0;
+    } else if (is_digits(device)) {
+      device_index = atoi(device);
+    } else {
+      device_index = get_rtlsdr_index_by_serial(device);
+      if (device_index < 0) {
+        fprintf(stderr, "Could not find RTL-SDR device with serial '%s'\n", device);
+        return 1;
+      }
+    }
     init_dab_state(&dab, &sdr, eti_callback);
     dab->device_type = DAB_DEVICE_RTLSDR;
     do_sdr_decode(dab, frequency, gain, device_index);
