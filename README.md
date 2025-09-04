@@ -33,16 +33,8 @@ It consists of a set of fixed-size (6144 byte) frames, each containing
 
 ## Hardware support
 
-Note that there is currently no way to specify the device - dab2eti
-will first look for and use a /dev/wavefinder0 device, and if that is
-not found, it will search for RTL-SDR devices.
-
-dab2eti on a Wavefinder requires around 51% CPU (on an Intel(R)
-Core(TM)2 Duo CPU E6750 @ 2.66GHz) to decode the BBC National DAB
-ensemble.
-
-dab2eti on an RTL-SDR dongle requires around 68% CPU on the same CPU
-and ensemble.
+There is now way to specify the device - dab2eti
+will by default use the first RTL-SDR device it finds otherwise it will look for and use a /dev/wavefinder0 device.
 
 There is an experimental Viterbi decoder (which uses x64 SSE
 instructions, so will only compile for x64) which can be enabled by
@@ -88,11 +80,11 @@ API.
 dab2eti is used to receive an ETI stream, and the frequency is
 specified in Hz.  e.g.
 
-./dab2eti 218640000 > dump.eti
+./dab2eti -f 218640000 -t wavefinder > dump.eti
 
 to record a stream or
 
-./dab2eti 218640000 | eti2mpa 2 | madplay -v -
+./dab2eti -f 218640000 -t wavefinder | eti2mpa 2 | madplay -v -
 
 to play sub-channel 2 from the ensemble.
 
@@ -105,12 +97,18 @@ tested) which is able to lock onto a DAB ensemble using auto-gain.
 For my other devices (one with an FC00013, and one with an R828D), I
 need to very carefully set the gain manually.
 
-To set the gain, you use the optional second parameter to dab2eti,
+To set the gain, you use the optional -g parameter to dab2eti,
 which is the gain specified in tenths of a decibel.
 
 e.g. to record an ensemble broadcasting at 218.640MHz with 9dB gain:
 
-./dab2eti 218640000 90 > dump.eti
+./dab2eti -f 218640000 -g 90 > dump.eti
+
+You can specify the RTL_SDR device to use by index or serial using the -d option, if not specified the first RTL_SDR found is used
+
+./dab2eti -f 218640000 -d 2 -g 90 > dump.eti
+
+./dab2eti -f 218640000 -d "example-serial" -g 90 > dump.eti
 
 dab2eti will display the list of supported gain values - each tuner
 supports a different set of gain values.
