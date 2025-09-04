@@ -2,8 +2,6 @@ Things to do (in no particular order):
 
 * Handle multiplex reconfigurations
 
-* Allow the user to specify the device to use.
-
 * Add the ability to record (and playback) raw data for
   testing/debugging usage.
 
