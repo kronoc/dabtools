@@ -34,10 +34,24 @@ ensemble.  It is defined in ETSI 300 799.
 It consists of a set of fixed-size (6144 byte) frames, each containing
 24ms of audio and other data.
 
-## Hardware support
+## Building
 
-There is now way to specify the device - dab2eti
-will by default use the first RTL-SDR device it finds otherwise it will look for and use a /dev/wavefinder0 device.
+### Dependencies
+
+dabtools requires librtlsdr and libfftw3.  The former can be found at
+http://sdr.osmocom.org/trac/wiki/rtl-sdr and nowadays both should also be
+available via your distribution's package manage (e.g. libfftw3-dev).
+
+### Compilation
+
+```
+mkdir build
+cd build
+cmake ..
+make
+```
+
+### Build Options
 
 There is an experimental Viterbi decoder (which uses x64 SSE
 instructions, so will only compile for x64) which can be enabled by
@@ -48,12 +62,13 @@ This Viterbi decoder gives a massive performance boost - reducing CPU
 usage from about 51% to about 7% when used with a Wavefinder, and from
 about 68% to about 28% when used with an RTL-SDR device.
 
-
 Note however that in every 5th transmission frame the Wavefinder skips
 the FIC symbols and doesn't provide them to the host computer.  This
 means that an ETI file created from a Wavefinder will be missing the
 FIBs in 4 frames out of every 20 (dab2eti writes FIBs with 100%
 padding in their place).
+
+## SDR Hardware
 
 ### Psion Wavefinder
 
@@ -116,12 +131,18 @@ You can specify the RTL_SDR device to use by index or serial using the -d option
 dab2eti will display the list of supported gain values - each tuner
 supports a different set of gain values.
 
+## Usage with dablin
 
-## Building
+This for of devtools changes the command line options for dab2eti. 
+In order to use this fork with dablin a shell script is provided. 
+Edit the shell script to specify the device options you wish to use 
+and then invoke dablin referencing the script e.g.
 
-dabtools requires librtlsdr and libfftw3.  The former can be found at
-http://sdr.osmocom.org/trac/wiki/rtl-sdr and the latter should be
-available via your distribution's package manage (e.g. libfftw3-dev).
+```
+dablin -d ./dab2eti.sh -c 7C -g 61 -s 0x2206
+```
+
+This allows you to specify device specific options which were previously impossible to set.
 
 ## Other ETI tools
 
