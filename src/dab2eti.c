@@ -268,6 +268,7 @@ void usage(void)
     "  -g gain           (optional, tuner gain value; default: automatic)\n"
     "  -d device         (optional: for wavefinder, device path; for rtlsdr, device index or serial; default: 0)\n"
     "  -t device_type    (optional: 'wavefinder' or 'rtlsdr'; default: rtlsdr)\n"
+    "  -p ppm            (optional, integer parts per million correction for frequency; default: 0)\n"
     "    For rtlsdr: device can be index (e.g. 0) or serial string (e.g. \"00000001\")\n"
   );
 }
