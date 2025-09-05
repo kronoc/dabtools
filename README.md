@@ -133,7 +133,7 @@ supports a different set of gain values.
 
 ## Usage with dablin
 
-This for of devtools changes the command line options for dab2eti. 
+This fork of devtools changes the command line options for dab2eti. 
 In order to use this fork with dablin a shell script is provided. 
 Edit the shell script to specify the device options you wish to use 
 and then invoke dablin referencing the script e.g.
