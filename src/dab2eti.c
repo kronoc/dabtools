@@ -279,10 +279,11 @@ int main(int argc, char* argv[])
   char device[256] = ""; // No default, check per device_type
   char device_type[32] = "rtlsdr"; // Default to rtlsdr
   int device_index = 0;
+  int ppm = 0;
   struct dab_state_t* dab;
 
   int opt;
-  while ((opt = getopt(argc, argv, "f:g:d:t:h")) != -1) {
+  while ((opt = getopt(argc, argv, "f:g:d:t:p:h")) != -1) {
     switch (opt) {
       case 'f':
         frequency = atoi(optarg);
@@ -304,6 +305,9 @@ int main(int argc, char* argv[])
           return 1;
         }
         break;
+      case 'p':
+        ppm = atoi(optarg);
+      break;
       case 'h':
       default:
         usage();
@@ -315,6 +319,12 @@ int main(int argc, char* argv[])
     usage();
     return 1;
   }
+
+ if (ppm != 0) {
+   int freq_orig = frequency;
+   frequency = freq_orig + (int)((freq_orig * ppm) / 1000000);
+   fprintf(stderr, "Adjusting frequency %d Hz by %d ppm -> %d Hz\n", freq_orig, ppm, frequency);
+ }
 
   if (strcmp(device_type, "wavefinder") == 0) {
     // If device path provided, use it, else default
