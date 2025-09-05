@@ -263,7 +263,7 @@ int get_rtlsdr_index_by_serial(const char *serial) {
 void usage(void)
 {
   fprintf(stderr,
-    "Usage: dab2eti -f frequency [-g gain] [-d device] [-t device_type]\n"
+    "Usage: dab2eti -f frequency [-g gain] [-d device] [-t device_type] [-p ppm]\n"
     "  -f frequency      (required, in Hz)\n"
     "  -g gain           (optional, tuner gain value; default: automatic)\n"
     "  -d device         (optional: for wavefinder, device path; for rtlsdr, device index or serial; default: 0)\n"
