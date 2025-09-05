@@ -38,9 +38,14 @@ It consists of a set of fixed-size (6144 byte) frames, each containing
 
 ### Dependencies
 
-dabtools requires librtlsdr and libfftw3.  The former can be found at
-http://sdr.osmocom.org/trac/wiki/rtl-sdr and nowadays both should also be
-available via your distribution's package manage (e.g. libfftw3-dev).
+dabtools requires the gcc compiler along with clang support. Both librtlsdr and libfftw3 are also needed.  The former can be found at
+http://sdr.osmocom.org/trac/wiki/rtl-sdr and nowadays both should also be available via your distribution's package manage (e.g. libfftw3-dev).
+
+On Debian based systems you may want to execute something like:
+
+```
+sudo apt-get install -y libusb-1.0-0-dev librtlsdr-dev libfftw3-dev
+```
 
 ### Compilation
 
